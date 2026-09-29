@@ -262,6 +262,111 @@ def test_NameError_in_strings():
         p.inflect("plural(two)")
 
 
+def test_uncountable_nouns_with_quantities():
+    """
+    Uncountable nouns keep their form with any quantity.
+    """
+    p = inflect.engine()
+    uncountables = ["information", "equipment", "furniture", "news"]
+    for word in uncountables:
+        assert p.plural(word) == word
+        assert p.plural_noun(word) == word
+        for count in range(5):
+            assert p.plural(word, count) == word
+            assert p.no(word, count).endswith(f" {word}")
+        # singular of an uncountable is itself: round trip is stable
+        assert p.singular_noun(word) == word
+        assert p.singular_noun(p.plural(word)) == word
+
+    assert p.no("information", 2) == "2 information"
+    assert p.no("equipment", 3) == "3 equipment"
+
+
+def test_compound_possessive_roundtrip():
+    """
+    plural followed by singular_noun is an identity on singular
+    compounds and possessive phrases, and the round trip is idempotent.
+    """
+    p = inflect.engine()
+    phrases = [
+        "mother-in-law",
+        "attorney general",
+        "commander-in-chief",
+        "lady-in-waiting",
+        "passerby",
+        "brother-in-law",
+        "brother-in-law's house",
+        "son-in-law's car",
+        "dog's bone",
+        "children's toy",
+        "James's book",
+        "the cat's pajamas",
+    ]
+    for phrase in phrases:
+        plural = p.plural(phrase)
+        # pluralization is deterministic
+        assert p.plural(phrase) == plural
+        # plural -> singular recovers the original
+        assert p.singular_noun(plural) == phrase
+        # and applying the round trip again changes nothing
+        assert p.plural(p.singular_noun(plural)) == plural
+
+    # canonical spot checks
+    assert p.plural("mother-in-law") == "mothers-in-law"
+    assert p.plural("brother-in-law") == "brothers-in-law"
+    assert p.plural("brother-in-law's house") == "brothers-in-law's house"
+    assert p.plural("dog's bone") == "dog's bones"
+
+
+def test_classical_toggle_is_explainable():
+    """
+    Classical mode only affects words with documented classical forms,
+    and toggling back restores the modern output exactly.
+    """
+    p = inflect.engine()
+    words = [
+        "formula",
+        "index",
+        "cow",
+        "person",
+        "brother",
+        "criterion",
+        "dog",
+        "attorney general",
+        "brother-in-law",
+    ]
+
+    p.classical(all=False)
+    modern = {w: p.plural(w) for w in words}
+    p.classical(all=True)
+    classical = {w: p.plural(w) for w in words}
+    p.classical(all=False)
+    # no state leaks: toggling back reproduces the modern output
+    assert {w: p.plural(w) for w in words} == modern
+    p.classical(all=True)
+    assert {w: p.plural(w) for w in words} == classical
+    p.classical(all=False)
+
+    # documented classical distinctions
+    assert modern["formula"] == "formulas"
+    assert classical["formula"] == "formulae"
+    assert modern["index"] == "indexes"
+    assert classical["index"] == "indices"
+    assert modern["cow"] == "cows"
+    assert classical["cow"] == "kine"
+    assert modern["person"] == "people"
+    assert classical["person"] == "persons"
+    assert modern["brother"] == "brothers"
+    assert classical["brother"] == "brethren"
+    assert modern["brother-in-law"] == "brothers-in-law"
+    assert classical["brother-in-law"] == "brethren-in-law"
+
+    # words without classical variants are unaffected by the toggle
+    assert classical["dog"] == modern["dog"] == "dogs"
+    assert classical["criterion"] == modern["criterion"] == "criteria"
+    assert classical["attorney general"] == modern["attorney general"]
+
+
 def get_data():
     filename = os.path.join(os.path.dirname(__file__), "inflections.txt")
     with open(filename, encoding='utf-8') as strm:

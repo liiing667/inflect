@@ -1036,6 +1036,7 @@ pl_sb_uninflected_endings = [
     # UNCOUNTABLE NOUNS
     "butter",
     "cash",
+    "equipment",
     "furniture",
     "information",
     # SOME FISH AND HERD ANIMALS
@@ -2998,9 +2999,15 @@ class engine:
         pivot = cls._find_pivot(parts, pl_prep_list_da)
 
         transformed = transform(parts[pivot - 1]) or parts[pivot - 1]
-        return " ".join(
-            parts[: pivot - 1] + [sep.join([transformed, parts[pivot], ''])]
-        ) + " ".join(parts[(pivot + 1) :])
+
+        def rebuild(head):
+            return " ".join(
+                parts[: pivot - 1] + [sep.join([head, parts[pivot], ''])]
+            ) + " ".join(parts[(pivot + 1) :])
+
+        # Distribute classical alternatives ("a|b") across the whole phrase,
+        # so postprocess sees both options fully formed.
+        return "|".join(rebuild(option) for option in transformed.split("|"))
 
     def _handle_long_compounds(self, word: Words, count: int) -> Union[str, None]:
         """
@@ -3655,6 +3662,8 @@ class engine:
         >>> ordinal('one')
         'first'
         """
+        if str(num).startswith("-"):
+            return f"-{self.ordinal(str(num)[1:])}"
         if DIGIT.match(str(num)):
             if isinstance(num, (float, int)) and int(num) == num:
                 n = int(num)

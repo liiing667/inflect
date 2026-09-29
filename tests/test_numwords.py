@@ -396,3 +396,57 @@ def test_issue_131():
     p = inflect.engine()
     for nth_word in inflect.nth_suff:
         assert p.number_to_words(nth_word) == "zero"
+
+
+def test_negative_ordinals():
+    p = inflect.engine()
+    # a negative ordinal is the positive one with a leading minus
+    for n in range(1, 200):
+        assert p.ordinal(-n) == f"-{p.ordinal(n)}"
+        assert p.ordinal(str(-n)) == f"-{p.ordinal(n)}"
+
+    assert p.ordinal(-3) == "-3rd"
+    assert p.ordinal(-21) == "-21st"
+    assert p.ordinal(-42) == "-42nd"
+    assert p.ordinal(-1.2) == "-1.2nd"
+    assert p.ordinal("minus forty-two") == "minus forty-second"
+
+
+def test_ordinal_suffix_invariant():
+    """
+    Ordinal suffixes follow the standard English rule for any number.
+    """
+    p = inflect.engine()
+    special = {1: "st", 2: "nd", 3: "rd"}
+    for n in range(500):
+        if 11 <= n % 100 <= 13:
+            suffix = "th"
+        else:
+            suffix = special.get(n % 10, "th")
+        assert p.ordinal(n) == f"{n}{suffix}"
+
+
+def test_big_numbers_and_negatives():
+    p = inflect.engine()
+    # a negative number reads as "minus" plus the positive reading
+    for n in [1, 42, 100, 2026, 1234567, 10**9, 10**12]:
+        assert p.number_to_words(-n) == f"minus {p.number_to_words(n)}"
+        # output is deterministic across repeated calls on one engine
+        assert p.number_to_words(n) == p.number_to_words(n)
+
+    assert p.number_to_words(1234567) == (
+        "one million, two hundred and thirty-four thousand, "
+        "five hundred and sixty-seven"
+    )
+    assert p.number_to_words(10**12) == "one trillion"
+    assert p.ordinal(10**6) == "1000000th"
+    assert p.ordinal(10**12) == "1000000000000th"
+
+
+def test_year_readings():
+    p = inflect.engine()
+    assert p.number_to_words(2026) == "two thousand and twenty-six"
+    assert p.number_to_words(1900) == "one thousand, nine hundred"
+    assert p.number_to_words(2000) == "two thousand"
+    assert p.number_to_words(1999) == "one thousand, nine hundred and ninety-nine"
+    assert p.ordinal(2026) == "2026th"
