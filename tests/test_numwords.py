@@ -1,3 +1,5 @@
+import pytest
+
 import inflect
 
 
@@ -396,3 +398,76 @@ def test_issue_131():
     p = inflect.engine()
     for nth_word in inflect.nth_suff:
         assert p.number_to_words(nth_word) == "zero"
+
+
+def test_negative_numbers_mirror_positive():
+    """
+    Negatives are the positive reading prefixed with 'minus',
+    for cardinals and ordinals alike.
+    """
+    p = inflect.engine()
+    samples = list(range(1, 500)) + [10**3, 10**6 + 1, 123456789, 10**12]
+    for n in samples:
+        assert p.number_to_words(-n) == "minus " + p.number_to_words(n)
+        assert p.ordinal(-n) == "-" + p.ordinal(n)
+        assert (
+            p.number_to_words(p.ordinal(-n))
+            == "minus " + p.number_to_words(p.ordinal(n))
+        )
+
+
+def test_big_numbers_scale_words():
+    p = inflect.engine()
+    scales = [
+        "thousand",
+        "million",
+        "billion",
+        "trillion",
+        "quadrillion",
+        "quintillion",
+        "sextillion",
+        "septillion",
+        "octillion",
+        "nonillion",
+        "decillion",
+    ]
+    for exp, name in enumerate(scales, start=1):
+        assert p.number_to_words(10 ** (3 * exp)) == f"one {name}"
+
+    # compositional: millions multiply the headword
+    for m in range(1, 1000):
+        assert p.number_to_words(m * 10**6) == p.number_to_words(m) + " million"
+
+    # beyond decillion the library refuses to guess
+    with pytest.raises(inflect.NumOutOfRangeError):
+        p.number_to_words(10**36)
+
+
+def test_ordinal_words_match_ordinal_of_words():
+    """
+    Reading an ordinal numeral aloud is the same as taking the
+    ordinal of the cardinal reading.
+    """
+    p = inflect.engine()
+    samples = list(range(0, 2000)) + [10**6, 10**9 + 1, 123456789]
+    for n in samples:
+        assert p.number_to_words(p.ordinal(n)) == p.ordinal(p.number_to_words(n))
+
+
+def test_year_style_grouping():
+    """
+    With group=2 a four-digit year is read as two two-digit chunks:
+    the leading pair reads as a number in its own right, and zero
+    digits may be read as 'oh'.
+    """
+    p = inflect.engine()
+    for year in range(1000, 10000):
+        words = p.number_to_words(year, group=2)
+        # deterministic
+        assert p.number_to_words(year, group=2) == words
+        # leading pair is read as a number in its own right
+        assert words.split(", ")[0] == p.number_to_words(year // 100)
+        # 'oh' stands in for zero digits, as in year readings
+        assert p.number_to_words(year, group=2, zero="oh") == words.replace(
+            "zero", "oh"
+        )

@@ -1036,6 +1036,7 @@ pl_sb_uninflected_endings = [
     # UNCOUNTABLE NOUNS
     "butter",
     "cash",
+    "equipment",
     "furniture",
     "information",
     # SOME FISH AND HERD ANIMALS
@@ -1978,6 +1979,17 @@ FUNCTION_CALL = re.compile(r"((\w+)\([^)]*\)*)", re.IGNORECASE)
 PARTITION_WORD = re.compile(r"\A(\s*)(.+?)(\s*)\Z")
 PL_SB_POSTFIX_ADJ_STEMS_RE = re.compile(
     rf"^(?:{pl_sb_postfix_adj_stems})$", re.IGNORECASE
+)
+
+# SINGULAR SIDE OF POSTFIX-ADJECTIVE COMPOUNDS:
+# THE HEAD MAY BE INFLECTED ("courts-martial", "attorneys general"),
+# SO MATCH ANY HEAD FOLLOWED BY ONE OF THE POSTFIX ADJECTIVES.
+si_sb_postfix_adj_stems = (
+    f"(.+)((?:-|\\s+)(?:{'|'.join(key for key, _ in _pl_sb_postfix_adj_defn)}))"
+)
+
+SI_SB_POSTFIX_ADJ_STEMS_RE = re.compile(
+    rf"^(?:{si_sb_postfix_adj_stems})$", re.IGNORECASE
 )
 PL_SB_PREP_DUAL_COMPOUND_RE = re.compile(
     rf"^(?:{pl_sb_prep_dual_compound})$", re.IGNORECASE
@@ -3238,9 +3250,11 @@ class engine:
 
         # HANDLE COMPOUNDS ("Governor General", "mother-in-law", "aide-de-camp", ETC.)
 
-        mo = PL_SB_POSTFIX_ADJ_STEMS_RE.search(word)
-        if mo and mo.group(2) != "":
-            return f"{self._sinoun(mo.group(1), 1, gender=gender)}{mo.group(2)}"
+        mo = SI_SB_POSTFIX_ADJ_STEMS_RE.search(word)
+        if mo:
+            singular_head = self._sinoun(mo.group(1), 1, gender=gender)
+            if singular_head is not False:
+                return f"{singular_head}{mo.group(2)}"
 
         with contextlib.suppress(ValueError):
             return self._handle_prepositional_phrase(
@@ -3655,7 +3669,7 @@ class engine:
         >>> ordinal('one')
         'first'
         """
-        if DIGIT.match(str(num)):
+        if DIGIT.match(str(num).lstrip("+-")):
             if isinstance(num, (float, int)) and int(num) == num:
                 n = int(num)
             else:
@@ -3670,6 +3684,7 @@ class engine:
                         n = int(str(num)[:-1])
                 else:
                     n = int(num)  # type: ignore[arg-type]
+            n = abs(n)
             try:
                 post = nth[n % 100]
             except KeyError:

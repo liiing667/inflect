@@ -118,6 +118,89 @@ def test_def():
     assert p.plural("red", 2) == "gules"
 
 
+def test_uncountable_nouns_with_count():
+    """
+    Uncountable nouns never gain an 's', whatever the count.
+
+    Production inputs like "2 information" and "3 equipment"
+    must be rendered unchanged.
+    """
+    p = inflect.engine()
+    for word in ("information", "equipment", "furniture", "cash"):
+        assert p.plural(word, 1) == word
+        assert p.plural(word, 2) == word
+        assert p.no(word, 0) == f"no {word}"
+        assert p.no(word, 2) == f"2 {word}"
+        # uninflected forms are their own singular
+        assert p.singular_noun(p.plural(word, 2)) == word
+
+
+def test_compound_and_possessive_roundtrip():
+    """
+    plural -> singular_noun round-trips to the original input
+    for compounds and possessives, and the round trip is idempotent.
+    """
+    p = inflect.engine()
+    samples = [
+        "mother-in-law",
+        "son-in-law",
+        "editor-in-chief",
+        "man-of-war",
+        "court-martial",
+        "pound-force",
+        "attorney general",
+        "major general",
+        "bill of attainder",
+        "passerby",
+        "dog's bone",
+        "man's hat",
+    ]
+    for word in samples:
+        plural = p.plural(word)
+        assert p.singular_noun(plural) == word
+        # idempotent: pluralizing the recovered singular gives the same plural
+        assert p.plural(p.singular_noun(plural)) == plural
+
+
+def test_classical_toggle():
+    """
+    The same batch of words yields the assimilated plurals in modern
+    mode and the classical plurals in classical mode; both forms
+    singularize back to the headword, and toggling is reversible.
+    """
+    p = inflect.engine()
+    batch = {
+        "formula": ("formulas", "formulae"),
+        "index": ("indexes", "indices"),
+        "maximum": ("maximums", "maxima"),
+        "appendix": ("appendixes", "appendices"),
+        "focus": ("focuses", "foci"),
+        "cherub": ("cherubs", "cherubim"),
+        "dogma": ("dogmas", "dogmata"),
+        "medium": ("mediums", "media"),
+        "alumna": ("alumnae", "alumnae"),
+    }
+
+    p.classical(all=False)
+    modern = {w: p.plural_noun(w) for w in batch}
+    p.classical(all=True)
+    classical = {w: p.plural_noun(w) for w in batch}
+
+    for word, (expected_modern, expected_classical) in batch.items():
+        assert modern[word] == expected_modern
+        assert classical[word] == expected_classical
+
+    for word in batch:
+        p.classical(all=False)
+        assert p.singular_noun(modern[word]) == word
+        p.classical(all=True)
+        assert p.singular_noun(classical[word]) == word
+
+    # no state leaks: switching back reproduces the modern output
+    p.classical(all=False)
+    assert {w: p.plural_noun(w) for w in batch} == modern
+
+
 def test_ordinal():
     p = inflect.engine()
     assert p.ordinal(0) == "0th"
